@@ -109,7 +109,7 @@ namespace TCPServer
 		/// <param name="message">書き込むメッセージ</param>
 		private void message(string message)
 		{
-			msg.TryAdd(DateTime.Now.ToString("yyyy/M/d HH:mm:ss,") + message, Timeout.Infinite);
+			_ = msg.TryAdd(DateTime.Now.ToString("yyyy/M/d HH:mm:ss,") + message, Timeout.Infinite);
 		}
 
 		/// <summary>
@@ -121,7 +121,7 @@ namespace TCPServer
 			// 最初にファイルの有無を確認
 			if (File.Exists(fileName) == false)
 			{
-				using var hStream = File.Create(fileName);
+				using FileStream hStream = File.Create(fileName);
 				// 作成時に返される FileStream を利用して閉じる
 				hStream?.Close();
 			}
@@ -131,16 +131,16 @@ namespace TCPServer
 				{
 					try
 					{
-						msg.TryTake(out string log, Timeout.Infinite);
+						_ = msg.TryTake(out string log, Timeout.Infinite);
 						while (true)
 						{
 							try
 							{
 								// ファイルがロックされている場合例外が発生して以下の処理は行わずリトライとなる
-								using var stream = new FileStream(fileName, FileMode.Open);
+								using FileStream stream = new FileStream(fileName, FileMode.Open);
 								// ログ書き込み
-								using var fs = new FileStream(fileName, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
-								using var sw = new StreamWriter(fs, Encoding.GetEncoding("Shift-JIS"));
+								using FileStream fs = new FileStream(fileName, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
+								using StreamWriter sw = new StreamWriter(fs, Encoding.GetEncoding("Shift-JIS"));
 								sw.WriteLine(log);
 								break;
 							}
@@ -167,45 +167,45 @@ namespace TCPServer
 		/// <returns></returns>
 		internal bool Open(string ipAddress, int port, int listen, int buffersize)
 		{
-			// 既にオープン状態ならtrueを返す
-			if (isOpen == true)
-				return true;
-
-			bufferSize = buffersize;
-			AllDone.Set();
-			// 指定されたIPアドレスが正しい値かチェック
-			if (IPAddress.TryParse(ipAddress, out IPAddress result) == true)
+			// まだポートがオープンしけなければ処理
+			if (isOpen == false)
 			{
-				IP = result;
-			}
-			else
-			{
-				if (isLog == true)
-					message("IPアドレス文字列が不適切です");
-				if (isMessage == true)
-					_ = MessageBox.Show("IPアドレス文字列が不適切です", "TCP Server オープン", MessageBoxButton.OK, MessageBoxImage.Error);
-				return false;
-			}
-
-			// 引数のIPアドレスがPCに存在しているか確認(127.0.0.1は除く)
-			if (ipAddress != "127.0.0.1")
-			{
-				if (new List<IPAddress>(Dns.GetHostAddresses(Dns.GetHostName())).ConvertAll(x => x.ToString()).Any(l => l == ipAddress) == false)
+				bufferSize = buffersize;
+				_ = AllDone.Set();
+				// 指定されたIPアドレスが正しい値かチェック
+				if (IPAddress.TryParse(ipAddress, out IPAddress result) == true)
+				{
+					IP = result;
+				}
+				else
 				{
 					if (isLog == true)
-						message("指定されたIPアドレスは存在しません。");
+						message("IPアドレス文字列が不適切です");
 					if (isMessage == true)
-						_ = MessageBox.Show("指定されたIPアドレスは存在しません。", "TCP Server オープン", MessageBoxButton.OK, MessageBoxImage.Error);
+						_ = MessageBox.Show("IPアドレス文字列が不適切です", "TCP Server オープン", MessageBoxButton.OK, MessageBoxImage.Error);
 					return false;
 				}
+
+				// 引数のIPアドレスがPCに存在しているか確認(127.0.0.1は除く)
+				if (ipAddress != "127.0.0.1")
+				{
+					if (new List<IPAddress>(Dns.GetHostAddresses(Dns.GetHostName())).ConvertAll(x => x.ToString()).Any(l => l == ipAddress) == false)
+					{
+						if (isLog == true)
+							message("指定されたIPアドレスは存在しません。");
+						if (isMessage == true)
+							_ = MessageBox.Show("指定されたIPアドレスは存在しません。", "TCP Server オープン", MessageBoxButton.OK, MessageBoxImage.Error);
+						return false;
+					}
+				}
+
+				Sock = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+				Sock.Bind(new IPEndPoint(IP, port));
+				Sock.Listen(listen);
+
+				isOpen = true;
+				accept();
 			}
-
-			Sock = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-			Sock.Bind(new IPEndPoint(IP, port));
-			Sock.Listen(listen);
-
-			isOpen = true;
-			accept();
 
 			return true;
 		}
@@ -219,10 +219,11 @@ namespace TCPServer
 			{
 				while (true)
 				{
-					AllDone.Reset();
+					_ = AllDone.Reset();
 					try
 					{
-						Sock.BeginAccept(new AsyncCallback(acceptCallback), Sock);
+						// 受信接続の試行を受け入れる非同期操作を開始
+						_ = Sock.BeginAccept(new AsyncCallback(acceptCallback), Sock);
 					}
 					catch (ObjectDisposedException)
 					{
@@ -237,7 +238,7 @@ namespace TCPServer
 							continue;
 						}
 					}
-					AllDone.WaitOne();
+					_ = AllDone.WaitOne();
 				}
 			});
 		}
@@ -249,9 +250,9 @@ namespace TCPServer
 		private void acceptCallback(IAsyncResult asyncResult)
 		{
 			// 待機スレッドが進行するようにシグナルをセット
-			AllDone.Set();
+			_ = AllDone.Set();
 			// StateObjectを作成しソケットを取得
-			var state = new StateObject(bufferSize);
+			StateObject state = new StateObject(bufferSize);
 			try
 			{
 				state.ClientSocket = ((Socket)asyncResult.AsyncState).EndAccept(asyncResult);
@@ -270,7 +271,7 @@ namespace TCPServer
 			// 接続中のクライアントを追加
 			ClientSockets.Add(state.ClientSocket);
 			// 受信時のコードバック処理を設定
-			state.ClientSocket.BeginReceive(state.Buffer, 0, bufferSize, 0, new AsyncCallback(readCallback), state);
+			_ = state.ClientSocket.BeginReceive(state.Buffer, 0, bufferSize, 0, new AsyncCallback(readCallback), state);
 		}
 
 		/// <summary>
@@ -280,36 +281,35 @@ namespace TCPServer
 		/// <param name="asyncResult"></param>
 		private void readCallback(IAsyncResult asyncResult)
 		{
-			// StateObjectとクライアントソケットを取得
-			var state = (StateObject)asyncResult.AsyncState;
+			// acceptCallbackで生成されたStateObjectインスタンスを取得
+			StateObject state = (StateObject)asyncResult.AsyncState;
 			// クライアントソケットから受信データを取得
 			try
 			{
 				// 受信サイズが0以上なら何かしらデータが送られてきたので処理を行う
 				if (state.ClientSocket.EndReceive(asyncResult) > 0)
 				{
-					Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 					// TCPで受信したデータは「state.Buffer」にあるのでstring文字列に変換しつつ残バッファの分だけ不要な0があるので削除
-					var receivestr = Encoding.GetEncoding("shift_jis").GetString(state.Buffer).TrimEnd('\0');
+					string receivestr = Encoding.GetEncoding("shift_jis").GetString(state.Buffer).TrimEnd('\0');
 
 					/***** ここに受信したデータに対する処理を記述する *****/
 					// 外部メソッドへ受信文字列を引数として渡し、string型の戻り値を送信データByte配列に変換
-					var senddata = Encoding.GetEncoding("shift_jis").GetBytes(Method(receivestr));
+					byte[] senddata = Encoding.GetEncoding("shift_jis").GetBytes(Method(receivestr));
 					// クライアントに非同期送信
-					state.ClientSocket.BeginSend(senddata, 0, senddata.Length, 0, new AsyncCallback(writeCallback), state);
+					_ = state.ClientSocket.BeginSend(senddata, 0, senddata.Length, 0, new AsyncCallback(writeCallback), state);
 				}
 				else
 				{
 					// 受信サイズが0の場合は切断(相手が切断した)
 					state.ClientSocket.Close();
-					ClientSockets.Remove(state.ClientSocket);
+					_ = ClientSockets.Remove(state.ClientSocket);
 				}
 			}
 			catch (SocketException)
 			{
 				// 強制的に切断された
 				state.ClientSocket.Close();
-				ClientSockets.Remove(state.ClientSocket);
+				_ = ClientSockets.Remove(state.ClientSocket);
 			}
 			catch (Exception e)
 			{
@@ -324,10 +324,19 @@ namespace TCPServer
 		/// <param name="asyncResult"></param>
 		private void writeCallback(IAsyncResult asyncResult)
 		{
-			var state = (StateObject)asyncResult.AsyncState;
-			state.ClientSocket.EndSend(asyncResult);
-			// 受信時のコードバック処理を設定
-			state.ClientSocket.BeginReceive(state.Buffer, 0, bufferSize, 0, new AsyncCallback(readCallback), state);
+			try
+			{
+				StateObject state = (StateObject)asyncResult.AsyncState;
+				// リモートデバイスへのデータ送信を完了
+				_ = state.ClientSocket.EndSend(asyncResult);
+				// 受信時のコードバック処理を設定
+				_ = state.ClientSocket.BeginReceive(state.Buffer, 0, bufferSize, 0, new AsyncCallback(readCallback), state);
+			}
+			catch (Exception e)
+			{
+				if (isLog == true)
+					message(e.Message);
+			}
 		}
 
 		/// <summary>
@@ -336,7 +345,7 @@ namespace TCPServer
 		internal void Close()
 		{
 			// 接続されているTCPクライアントがあれば切断する
-			foreach (var Cl in ClientSockets)
+			foreach (Socket Cl in ClientSockets)
 			{
 				Cl.Shutdown(SocketShutdown.Both);
 				Cl.Close();
