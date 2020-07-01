@@ -60,7 +60,7 @@ namespace TCPServer
 		/// <summary>
 		/// 接続待機のイベント
 		/// </summary>
-		private readonly ManualResetEvent AllDone = new ManualResetEvent(false);
+		private readonly ManualResetEventSlim AllDone = new ManualResetEventSlim(false);
 
 		/// <summary>
 		/// クライアント一覧
@@ -171,7 +171,7 @@ namespace TCPServer
 			if (isOpen == false)
 			{
 				bufferSize = buffersize;
-				_ = AllDone.Set();
+				AllDone.Set();
 				// 指定されたIPアドレスが正しい値かチェック
 				if (IPAddress.TryParse(ipAddress, out IPAddress result) == true)
 				{
@@ -219,7 +219,7 @@ namespace TCPServer
 			{
 				while (true)
 				{
-					_ = AllDone.Reset();
+					AllDone.Reset();
 					try
 					{
 						// 受信接続の試行を受け入れる非同期操作を開始
@@ -238,7 +238,7 @@ namespace TCPServer
 							continue;
 						}
 					}
-					_ = AllDone.WaitOne();
+					AllDone.Wait();
 				}
 			});
 		}
@@ -250,7 +250,7 @@ namespace TCPServer
 		private void acceptCallback(IAsyncResult asyncResult)
 		{
 			// 待機スレッドが進行するようにシグナルをセット
-			_ = AllDone.Set();
+			AllDone.Set();
 			// StateObjectを作成しソケットを取得
 			StateObject state = new StateObject(bufferSize);
 			try
