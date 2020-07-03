@@ -271,7 +271,7 @@ namespace TCPServer
 			// 接続中のクライアントを追加
 			ClientSockets.Add(state.ClientSocket);
 			// 受信時のコードバック処理を設定
-			_ = state.ClientSocket.BeginReceive(state.Buffer, 0, bufferSize, 0, new AsyncCallback(readCallback), state);
+			_ = state.ClientSocket.BeginReceive(state.Buffer, 0, bufferSize, 0, new AsyncCallback(receptionCallback), state);
 		}
 
 		/// <summary>
@@ -279,7 +279,7 @@ namespace TCPServer
 		/// これは接続してきたクライアント毎に生成される
 		/// </summary>
 		/// <param name="asyncResult"></param>
-		private void readCallback(IAsyncResult asyncResult)
+		private void receptionCallback(IAsyncResult asyncResult)
 		{
 			// acceptCallbackで生成されたStateObjectインスタンスを取得
 			StateObject state = (StateObject)asyncResult.AsyncState;
@@ -296,7 +296,7 @@ namespace TCPServer
 					// 外部メソッドへ受信文字列を引数として渡し、string型の戻り値を送信データByte配列に変換
 					byte[] senddata = Encoding.GetEncoding("shift_jis").GetBytes(Method(receivestr));
 					// クライアントに非同期送信
-					_ = state.ClientSocket.BeginSend(senddata, 0, senddata.Length, 0, new AsyncCallback(writeCallback), state);
+					_ = state.ClientSocket.BeginSend(senddata, 0, senddata.Length, 0, new AsyncCallback(transmissionCallback), state);
 				}
 				else
 				{
@@ -322,7 +322,7 @@ namespace TCPServer
 		/// TCP非同期送信が完了した時に呼び出されるメソッド
 		/// </summary>
 		/// <param name="asyncResult"></param>
-		private void writeCallback(IAsyncResult asyncResult)
+		private void transmissionCallback(IAsyncResult asyncResult)
 		{
 			try
 			{
@@ -330,7 +330,7 @@ namespace TCPServer
 				// リモートデバイスへのデータ送信を完了
 				_ = state.ClientSocket.EndSend(asyncResult);
 				// 受信時のコードバック処理を設定
-				_ = state.ClientSocket.BeginReceive(state.Buffer, 0, bufferSize, 0, new AsyncCallback(readCallback), state);
+				_ = state.ClientSocket.BeginReceive(state.Buffer, 0, bufferSize, 0, new AsyncCallback(receptionCallback), state);
 			}
 			catch (Exception e)
 			{
